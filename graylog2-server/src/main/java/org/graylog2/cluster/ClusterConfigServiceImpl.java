@@ -27,6 +27,7 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.system.NodeId;
+import org.graylog2.security.SafeClasses;
 import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.utilities.AutoValueUtils;
 import org.joda.time.DateTime;
@@ -55,6 +56,7 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
     private final NodeId nodeId;
     private final ObjectMapper objectMapper;
     private final ChainingClassLoader chainingClassLoader;
+    private final SafeClasses safeClasses;
     private final EventBus clusterEventBus;
 
     @Inject
@@ -76,6 +78,7 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
         this.dbCollection = checkNotNull(dbCollection);
         this.objectMapper = checkNotNull(objectMapper);
         this.chainingClassLoader = chainingClassLoader;
+        this.safeClasses = SafeClasses.allGraylogInternal();
         this.clusterEventBus = checkNotNull(clusterEventBus);
     }
 
@@ -156,6 +159,10 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
             for (ClusterConfig clusterConfig : clusterConfigs) {
                 final String type = clusterConfig.type();
                 try {
+                    if (!safeClasses.isSafeToLoad(type)) {
+                        LOG.warn("Skipping unsafe cluster config class \"{}\"", type);
+                        continue;
+                    }
                     final Class<?> cls = chainingClassLoader.loadClass(type);
                     classes.add(cls);
                 } catch (ClassNotFoundException e) {

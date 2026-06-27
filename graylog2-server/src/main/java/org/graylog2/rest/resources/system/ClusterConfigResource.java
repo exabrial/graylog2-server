@@ -31,7 +31,8 @@ import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.rest.MoreMediaTypes;
 import org.graylog2.rest.models.system.config.ClusterConfigList;
-import org.graylog2.shared.plugins.ChainingClassLoader;
+import org.graylog2.security.RestrictedChainingClassLoader;
+import org.graylog2.security.UnsafeClassLoadingAttemptException;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.slf4j.Logger;
@@ -67,15 +68,15 @@ public class ClusterConfigResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterConfigResource.class);
 
     private final ClusterConfigService clusterConfigService;
-    private final ChainingClassLoader chainingClassLoader;
+    private final RestrictedChainingClassLoader restrictedClassLoader;
     private final ObjectMapper objectMapper;
 
     @Inject
     public ClusterConfigResource(ClusterConfigService clusterConfigService,
-                                 ChainingClassLoader chainingClassLoader,
+                                 RestrictedChainingClassLoader restrictedClassLoader,
                                  ObjectMapper objectMapper) {
         this.clusterConfigService = requireNonNull(clusterConfigService);
-        this.chainingClassLoader = chainingClassLoader;
+        this.restrictedClassLoader = restrictedClassLoader;
         this.objectMapper = objectMapper;
     }
 
@@ -182,9 +183,12 @@ public class ClusterConfigResource extends RestResource {
     @Nullable
     private Class<?> classFromName(String className) {
         try {
-            return chainingClassLoader.loadClass(className);
+            return restrictedClassLoader.loadClassSafely(className);
         } catch (ClassNotFoundException e) {
             return null;
+        } catch (UnsafeClassLoadingAttemptException e) {
+            LOG.warn("Rejected unsafe class loading attempt: {}", className);
+            throw new BadRequestException(e.getMessage());
         }
     }
 }

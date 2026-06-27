@@ -32,6 +32,7 @@ import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.plugin.system.NodeId;
+import org.graylog2.security.SafeClasses;
 import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.utilities.AutoValueUtils;
 import org.mongojack.DBCursor;
@@ -56,6 +57,7 @@ public class ClusterEventPeriodical extends Periodical {
     private final ObjectMapper objectMapper;
     private final EventBus serverEventBus;
     private final ChainingClassLoader chainingClassLoader;
+    private final SafeClasses safeClasses;
 
     @Inject
     public ClusterEventPeriodical(final MongoJackObjectMapperProvider mapperProvider,
@@ -78,6 +80,7 @@ public class ClusterEventPeriodical extends Periodical {
         this.dbCollection = checkNotNull(dbCollection);
         this.objectMapper = checkNotNull(objectMapper);
         this.chainingClassLoader = chainingClassLoader;
+        this.safeClasses = SafeClasses.allGraylogInternal();
         this.serverEventBus = checkNotNull(serverEventBus);
 
         checkNotNull(clusterEventBus).registerClusterEventSubscriber(this);
@@ -199,6 +202,10 @@ public class ClusterEventPeriodical extends Periodical {
 
     private Object extractPayload(Object payload, String eventClass) {
         try {
+            if (!safeClasses.isSafeToLoad(eventClass)) {
+                LOG.warn("Rejected unsafe class loading attempt for cluster event: \"{}\"", eventClass);
+                return null;
+            }
             final Class<?> clazz = chainingClassLoader.loadClass(eventClass);
             return objectMapper.convertValue(payload, clazz);
         } catch (ClassNotFoundException e) {
