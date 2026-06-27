@@ -44,8 +44,19 @@ public class MongoDbSessionDAO extends CachingSessionDAO {
     private final MongoDBSessionService mongoDBSessionService;
 
     @Inject
-    public MongoDbSessionDAO(MongoDBSessionService mongoDBSessionService) {
+    public MongoDbSessionDAO(MongoDBSessionService mongoDBSessionService, com.google.common.eventbus.EventBus eventBus) {
         this.mongoDBSessionService = mongoDBSessionService;
+        eventBus.register(this);
+    }
+
+    @SuppressWarnings("unused")
+    @com.google.common.eventbus.Subscribe
+    public void sessionDeleted(SessionDeletedEvent event) {
+        final Session cachedSession = getCachedSession(event.sessionId());
+        if (cachedSession != null) {
+            LOG.debug("Removing deleted session from cache.");
+            uncache(cachedSession);
+        }
     }
 
     @Override

@@ -20,7 +20,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import org.apache.directory.api.ldap.model.cursor.CursorException;
 import org.apache.directory.api.ldap.model.exception.LdapException;
-import org.apache.directory.ldap.client.api.LdapConnectionConfig;
 import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authc.AuthenticationInfo;
@@ -32,7 +31,6 @@ import org.apache.shiro.realm.AuthenticatingRealm;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.database.users.User;
-import org.graylog2.security.TrustAllX509TrustManager;
 import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.ldap.LdapSettingsService;
 import org.graylog2.shared.security.ldap.LdapEntry;
@@ -69,11 +67,11 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
     private final UserService userService;
 
     @Inject
-    LdapUserAuthenticator(LdapConnector ldapConnector,
-                          LdapSettingsService ldapSettingsService,
-                          UserService userService,
-                          RoleService roleService,
-                          @Named("root_timezone") DateTimeZone rootTimeZone) {
+    LdapUserAuthenticator(final LdapConnector ldapConnector,
+                          final LdapSettingsService ldapSettingsService,
+                          final UserService userService,
+                          final RoleService roleService,
+                          @Named("root_timezone") final DateTimeZone rootTimeZone) {
         this.ldapConnector = ldapConnector;
         this.userService = userService;
         this.ldapSettingsService = ldapSettingsService;
@@ -85,11 +83,11 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
     }
 
     @Override
-    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authtoken) throws AuthenticationException {
+    protected AuthenticationInfo doGetAuthenticationInfo(final AuthenticationToken authtoken) throws AuthenticationException {
         // safe, we only handle this type
         final UsernamePasswordToken token = (UsernamePasswordToken) authtoken;
 
-        if (isEnabled() == false) {
+        if (!isEnabled()) {
             LOG.trace("LDAP is disabled, skipping");
             return null;
         }
@@ -132,11 +130,11 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
             }
 
             return new SimpleAccount(principal, null, "ldap realm");
-        } catch (LdapException e) {
+        } catch (final LdapException e) {
             LOG.error("LDAP error", e);
-        } catch (CursorException e) {
+        } catch (final CursorException e) {
             LOG.error("Unable to read LDAP entry", e);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOG.error("Error during LDAP user account sync. Cannot log in user {}", principal, e);
         }
 
@@ -144,11 +142,11 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
         return null;
     }
 
-    protected LdapNetworkConnection openLdapConnection(LdapSettings ldapSettings) throws LdapException, KeyStoreException, NoSuchAlgorithmException {
+    protected LdapNetworkConnection openLdapConnection(final LdapSettings ldapSettings) throws LdapException, KeyStoreException, NoSuchAlgorithmException {
         return ldapConnector.connect(ldapSettings);
     }
 
-    protected LdapEntry searchLdapUser(LdapNetworkConnection connection, String principal, LdapSettings ldapSettings) throws LdapException, CursorException {
+    protected LdapEntry searchLdapUser(final LdapNetworkConnection connection, final String principal, final LdapSettings ldapSettings) throws LdapException, CursorException {
         return ldapConnector.search(connection,
                 ldapSettings.getSearchBase(),
                 ldapSettings.getSearchPattern(),
@@ -166,9 +164,9 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
     }
 
     @Nullable
-    public User syncLdapUser(String principal) {
+    public User syncLdapUser(final String principal) {
 
-        if (isEnabled() == false) {
+        if (!isEnabled()) {
             LOG.trace("LDAP is disabled, skipping");
             return null;
         }
@@ -200,11 +198,11 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
             }
 
             return user;
-        } catch (LdapException e) {
+        } catch (final LdapException e) {
             LOG.error("LDAP error", e);
-        } catch (CursorException e) {
+        } catch (final CursorException e) {
             LOG.error("Unable to read LDAP entry", e);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOG.error("Error during LDAP user account sync. Cannot sync user {}", principal, e);
         }
 
@@ -213,7 +211,7 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
 
     @Nullable
     @VisibleForTesting
-    User syncFromLdapEntry(LdapEntry userEntry, LdapSettings ldapSettings, String username) {
+    User syncFromLdapEntry(final LdapEntry userEntry, final LdapSettings ldapSettings, final String username) {
         User user = userService.load(username);
 
         // create new user object if necessary
@@ -226,7 +224,7 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
 
         try {
             userService.save(user);
-        } catch (ValidationException e) {
+        } catch (final ValidationException e) {
             LOG.error("Cannot save user.", e);
             return null;
         }
@@ -234,7 +232,7 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
         return user;
     }
 
-    private void updateFromLdap(User user, LdapEntry userEntry, LdapSettings ldapSettings, String username) {
+    private void updateFromLdap(final User user, final LdapEntry userEntry, final LdapSettings ldapSettings, final String username) {
         final String displayNameAttribute = ldapSettings.getDisplayNameAttribute();
         final String fullName = firstNonNull(userEntry.get(displayNameAttribute), username);
 
@@ -266,7 +264,7 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
             // ldap search returned groups, these always override the ones set on the user
             try {
                 final Map<String, Role> roleNameToRole = roleService.loadAllLowercaseNameMap();
-                for (String ldapGroupName : userEntry.getGroups()) {
+                for (final String ldapGroupName : userEntry.getGroups()) {
                     final String roleName = ldapSettings.getGroupMapping().get(ldapGroupName);
                     if (roleName == null) {
                         LOG.debug("User {}: No group mapping for ldap group <{}>", username, ldapGroupName);
@@ -284,7 +282,7 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
                     }
                 }
 
-            } catch (NotFoundException e) {
+            } catch (final NotFoundException e) {
                 LOG.error("Unable to load user roles", e);
             }
         } else if (ldapSettings.getGroupMapping().isEmpty()
