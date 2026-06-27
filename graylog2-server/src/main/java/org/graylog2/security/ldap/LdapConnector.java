@@ -36,7 +36,10 @@ import org.apache.directory.api.ldap.model.name.Dn;
 import org.apache.directory.ldap.client.api.LdapConnectionConfig;
 import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.graylog2.plugin.DocsHelper;
+import org.graylog2.rest.models.system.ldap.requests.LdapTestConfigRequest;
+import org.graylog2.security.TrustAllX509TrustManager;
 import org.graylog2.shared.security.ldap.LdapEntry;
+import org.graylog2.shared.security.ldap.LdapSettings;
 import org.graylog2.shared.utilities.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +47,17 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Named;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.text.MessageFormat;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Locale;
@@ -67,10 +78,23 @@ public class LdapConnector {
     private static final String ATTRIBUTE_MEMBER_UID = "memberUid";
 
     private final int connectionTimeout;
+    private final LdapSettingsService ldapSettingsService;
 
     @Inject
-    public LdapConnector(@Named("ldap_connection_timeout") int connectionTimeout) {
+    public LdapConnector(@Named("ldap_connection_timeout") int connectionTimeout,
+                         LdapSettingsService ldapSettingsService) {
         this.connectionTimeout = connectionTimeout;
+        this.ldapSettingsService = ldapSettingsService;
+    }
+
+    public LdapNetworkConnection connect(LdapSettings settings) throws KeyStoreException, LdapException, NoSuchAlgorithmException {
+        final LdapConnectionConfig config = createConfig(settings);
+        return connect(config);
+    }
+
+    public LdapNetworkConnection connect(LdapTestConfigRequest request) throws KeyStoreException, LdapException, NoSuchAlgorithmException {
+        final LdapConnectionConfig config = createConfig(request);
+        return connect(config);
     }
 
     public LdapNetworkConnection connect(LdapConnectionConfig config) throws LdapException {
@@ -403,5 +427,63 @@ public class LdapConnector {
         }
         LOG.trace("Binding DN {} did not throw, connection authenticated: {}", principal, connection.isAuthenticated());
         return connection.isAuthenticated();
+    }
+
+    private LdapConnectionConfig createConfig(LdapTestConfigRequest request) throws KeyStoreException, NoSuchAlgorithmException {
+        final LdapConnectionConfig config = new LdapConnectionConfig();
+        final URI ldapUri = request.ldapUri();
+        config.setLdapHost(ldapUri.getHost());
+        config.setLdapPort(ldapUri.getPort());
+        config.setUseSsl(ldapUri.getScheme().startsWith("ldaps"));
+        config.setUseTls(request.useStartTls());
+
+        if (request.trustAllCertificates()) {
+            config.setTrustManagers(new TrustAllX509TrustManager());
+        } else {
+            config.setTrustManagers(createDefaultTrustManager());
+        }
+
+        if (!isNullOrEmpty(request.systemUsername())) {
+            config.setName(request.systemUsername());
+
+            if (!isNullOrEmpty(request.systemPassword())) {
+                config.setCredentials(request.systemPassword());
+            } else {
+                final LdapSettings ldapSettings = ldapSettingsService.load();
+                if (ldapSettings != null && !isNullOrEmpty(ldapSettings.getSystemPassword())) {
+                    config.setCredentials(ldapSettings.getSystemPassword());
+                }
+            }
+        }
+
+        return config;
+    }
+
+    private TrustManager createDefaultTrustManager() throws KeyStoreException, NoSuchAlgorithmException {
+        final TrustManagerFactory tmf = TrustManagerFactory
+                .getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init((KeyStore) null);
+
+        return Arrays.stream(tmf.getTrustManagers())
+                .filter(trustManager -> trustManager instanceof X509TrustManager)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Unable to initialize default X509 trust manager."));
+    }
+
+    private LdapConnectionConfig createConfig(LdapSettings ldapSettings) throws KeyStoreException, NoSuchAlgorithmException {
+        final LdapConnectionConfig config = new LdapConnectionConfig();
+        config.setLdapHost(ldapSettings.getUri().getHost());
+        config.setLdapPort(ldapSettings.getUri().getPort());
+        config.setUseSsl(ldapSettings.getUri().getScheme().startsWith("ldaps"));
+        config.setUseTls(ldapSettings.isUseStartTls());
+        if (ldapSettings.isTrustAllCertificates()) {
+            config.setTrustManagers(new TrustAllX509TrustManager());
+        } else {
+            config.setTrustManagers(createDefaultTrustManager());
+        }
+        config.setName(ldapSettings.getSystemUserName());
+        config.setCredentials(ldapSettings.getSystemPassword());
+
+        return config;
     }
 }
