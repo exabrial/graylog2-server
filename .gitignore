@@ -1,42 +1,59 @@
 .idea
 .classpath
 .project
-.settings
-target
-out
-build/*
-dist/*
-build-before-profiler.xml
+.settings/
+target/
+out/
+build/
+dist/
+coverage/
+
+# NetBeans
 nbbuild.xml
-nbproject/*
-coverage
-build.xml
+nbproject/
 nbactions.xml
+build-before-profiler.xml
+build.xml
 
-data/*
-
-.DS_Store
-
+# Maven
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
 dependency-reduced-pom.xml
 
-/graylog2-rest-routes/src/main/java/org/graylog2/restroutes/generated
-
-/misc/elasticsearch.yml.2
-/misc/elasticsearch.yml.dev
-/misc/convert_rsyslog_db_to_mongo.rb
-
-/plugin/
+# Java
+*.class
+*.jar
+*.war
+*.ear
 *_gl2plugin.jar
 
+# IDE
 *.iml
 *.ipr
 *.iws
+.vscode/
+.factorypath
+.checkstyle
+.metadata
 
+# Vagrant
 .vagrant/
 
-**/pom.xml.versionsBackup
+# Misc
+*.log
+*~
+.DS_Store
+data/
+bin/
 
-/graylog2-server/src/main/resources/web-interface/assets/**/*
-
+# Graylog-specific
+/graylog2-rest-routes/src/main/java/org/graylog2/restroutes/generated/
+/graylog2-server/src/main/resources/web-interface/assets/**/
+/misc/elasticsearch.yml.2
+/misc/elasticsearch.yml.dev
+/misc/convert_rsyslog_db_to_mongo.rb
+/plugin/
 **/hs_err_pid*.log
-
