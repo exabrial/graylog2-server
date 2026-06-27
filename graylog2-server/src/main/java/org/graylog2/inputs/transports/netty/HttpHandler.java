@@ -34,14 +34,18 @@ import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 
 public class HttpHandler extends SimpleChannelInboundHandler<HttpRequest> {
+    private static final String CONTENT_TYPE_NDJSON = "application/x-ndjson";
+    private static final byte NEWLINE = '\n';
+    private static final byte CARRIAGE_RETURN = '\r';
+
     private final boolean enableCors;
 
-    public HttpHandler(boolean enableCors) {
+    public HttpHandler(final boolean enableCors) {
         this.enableCors = enableCors;
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, HttpRequest request) throws Exception {
+    protected void channelRead0(final ChannelHandlerContext ctx, final HttpRequest request) throws Exception {
         final Channel channel = ctx.channel();
         final boolean keepAlive = HttpUtil.isKeepAlive(request);
         final HttpVersion httpRequestVersion = request.protocolVersion();
@@ -59,13 +63,47 @@ public class HttpHandler extends SimpleChannelInboundHandler<HttpRequest> {
         final boolean correctPath = "/gelf".equals(request.uri());
         if (correctPath && request instanceof FullHttpRequest) {
             final FullHttpRequest fullHttpRequest = (FullHttpRequest) request;
-            final ByteBuf buffer = fullHttpRequest.content();
+            final ByteBuf requestBody = fullHttpRequest.content();
 
             // send on to raw message handler
             writeResponse(channel, keepAlive, httpRequestVersion, HttpResponseStatus.ACCEPTED, origin);
-            ctx.fireChannelRead(buffer.retain());
+
+            final String contentType = request.headers().get(HttpHeaderNames.CONTENT_TYPE);
+            if (CONTENT_TYPE_NDJSON.equals(contentType)) {
+                fireNewlineDelimitedMessages(ctx, requestBody);
+            } else {
+                ctx.fireChannelRead(requestBody.retain());
+            }
         } else {
             writeResponse(channel, keepAlive, httpRequestVersion, HttpResponseStatus.NOT_FOUND, origin);
+        }
+    }
+
+    /**
+     * Splits an NDJSON (newline-delimited JSON) body into individual messages
+     * and fires each as a separate {@code ByteBuf} downstream.
+     */
+    private void fireNewlineDelimitedMessages(final ChannelHandlerContext ctx, final ByteBuf requestBody) {
+        final int readableBytes = requestBody.readableBytes();
+        final byte[] bodyBytes = new byte[readableBytes];
+        requestBody.readBytes(bodyBytes);
+
+        int lineStart = 0;
+        for (int i = 0; i <= readableBytes; i++) {
+            if (i == readableBytes || bodyBytes[i] == NEWLINE) {
+                int lineEnd = i;
+                // trim trailing \r for CRLF safety
+                if (lineEnd > lineStart && bodyBytes[lineEnd - 1] == CARRIAGE_RETURN) {
+                    lineEnd--;
+                }
+                final int lineLength = lineEnd - lineStart;
+                if (lineLength > 0) {
+                    final ByteBuf messageBuf = ctx.alloc().buffer(lineLength);
+                    messageBuf.writeBytes(bodyBytes, lineStart, lineLength);
+                    ctx.fireChannelRead(messageBuf);
+                }
+                lineStart = i + 1;
+            }
         }
     }
 
