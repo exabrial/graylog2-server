@@ -1,3 +1,9 @@
+# Graylog 3.1 !!!
+
+We think that Graylog 3.1 was the best version of Graylog, and some of the more recent UI changes we're not in love with. Thats ok! It's not for everyone. We're thankful for Graylog staying OSS.
+
+This repository is an attempt to mitigate some really bad CVEs while bringing in a few new handy featurs like ND-JSON GELF support. Note that Graylog 3.1 still relies on unssupported versions of elastic and mongo, which can present their own problems. Be sure you have a solid plan together to mitigate those problems.
+
 # Graylog
 
 [![Build Status](https://travis-ci.org/Graylog2/graylog2-server.svg?branch=master)](https://travis-ci.org/Graylog2/graylog2-server)
